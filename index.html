@@ -1,0 +1,815 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>小浣熊的花材資料庫 v3.0.0</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Zen+Maru+Gothic:wght@400;700&display=swap');
+        
+        :root {
+            /* v3.0 配色：維持深暖色系，增強資料閱讀性 */
+            --bg-color: #26201E;       
+            --card-color: #362B28;     
+            --input-bg: rgba(0, 0, 0, 0.3);
+            --text-main: #EFE5D5;      
+            --text-sub: #A89088;       
+            --accent: #FFAB5E;         
+            --accent-hover: #D48438;
+            --nav-height: 70px;
+        }
+
+        body {
+            font-family: 'Zen Maru Gothic', sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        /* === 響應式佈局核心 === */
+        #app-container {
+            flex: 1;
+            position: relative;
+            overflow: hidden;
+            width: 100%;
+            /* 預設手機版樣式 */
+        }
+
+        /* 手機版 View 切換 */
+        .page-view {
+            position: absolute;
+            inset: 0;
+            overflow-y: auto;
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.3s ease;
+            display: flex;
+            flex-direction: column;
+            padding: 1rem;
+            padding-bottom: calc(var(--nav-height) + 1rem); /* 避開底部導覽 */
+        }
+
+        .page-view.active {
+            opacity: 1;
+            visibility: visible;
+            z-index: 10;
+        }
+
+        /* 筆電/桌機版 (Desktop) 樣式覆寫 */
+        @media (min-width: 768px) {
+            body {
+                padding: 20px; /* 桌機版留點邊距比較好看 */
+            }
+            
+            #app-container {
+                display: flex; /* 改為左右排列 */
+                flex-direction: row;
+                gap: 20px;
+                max-width: 1200px;
+                margin: 0 auto;
+                height: 100%;
+                overflow: hidden;
+            }
+
+            /* 在桌機版強制顯示所有 View，取消絕對定位 */
+            .page-view {
+                position: relative;
+                opacity: 1 !important;
+                visibility: visible !important;
+                padding: 0;
+                height: 100%;
+                overflow: hidden;
+            }
+
+            /* 左側展示區 */
+            #view-shop {
+                flex: 1;
+                border-right: 1px solid rgba(255,255,255,0.1);
+                padding-right: 20px;
+                justify-content: center;
+            }
+
+            /* 右側資料庫區 */
+            #view-diary {
+                flex: 1;
+                padding-left: 0;
+            }
+
+            /* 隱藏底部導覽列 */
+            .bottom-nav {
+                display: none !important;
+            }
+
+            /* 隱藏漢堡選單版本號，改顯示在角落 */
+            .version-tag {
+                top: 20px;
+                left: 20px;
+            }
+        }
+
+        /* Canvas 容器 */
+        #canvas-wrapper {
+            position: relative;
+            width: 100%;
+            /* 手機版限制寬度，桌機版自適應 */
+            max-width: 100%; 
+            aspect-ratio: 4/3; 
+            margin: 0 auto;
+            border-radius: 12px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            border: 4px solid var(--card-color);
+            background-color: #1a1a1a;
+            overflow: hidden;
+        }
+
+        canvas {
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+
+        /* 底部導覽列 (僅手機顯示) */
+        .bottom-nav {
+            height: var(--nav-height);
+            background-color: var(--card-color);
+            display: flex;
+            justify-content: space-around;
+            align-items: center;
+            box-shadow: 0 -5px 20px rgba(0,0,0,0.3);
+            z-index: 50;
+            position: fixed;
+            bottom: 0;
+            width: 100%;
+        }
+
+        .nav-btn {
+            color: var(--text-sub);
+            font-size: 0.8rem;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 4px;
+            transition: all 0.2s;
+            width: 50%;
+            height: 100%;
+            justify-content: center;
+            border: none;
+            background: transparent;
+        }
+        .nav-btn.active { color: var(--accent); }
+
+        /* 輸入元件通用樣式 */
+        .custom-input, .custom-select {
+            background-color: var(--input-bg);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            color: var(--text-main);
+            transition: all 0.3s;
+        }
+        .custom-input:focus, .custom-select:focus {
+            border-color: var(--accent);
+            background-color: rgba(0, 0, 0, 0.4);
+            outline: none;
+        }
+
+        /* 搜尋框 */
+        .search-box {
+            position: relative;
+            margin-bottom: 10px;
+        }
+        .search-box i {
+            position: absolute;
+            left: 12px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: var(--text-sub);
+            font-size: 0.8rem;
+        }
+        .search-box input {
+            width: 100%;
+            padding: 8px 10px 8px 32px;
+            border-radius: 20px;
+            font-size: 0.9rem;
+            background-color: rgba(0,0,0,0.2);
+            border: 1px solid rgba(255,255,255,0.05);
+            color: var(--text-main);
+        }
+
+        /* 版本號 */
+        .version-tag {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            font-size: 0.6rem;
+            color: var(--text-sub);
+            opacity: 0.5;
+            font-family: monospace;
+            z-index: 50;
+        }
+
+        /* 捲軸美化 */
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background-color: #55443F; border-radius: 3px; }
+
+        /* 缺圖提示框 */
+        #missing-assets-alert {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0, 0, 0, 0.95);
+            border: 1px solid var(--accent);
+            padding: 20px;
+            border-radius: 12px;
+            z-index: 100;
+            text-align: center;
+            max-width: 90%;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="version-tag">ver 3.0.0 (Database)</div>
+
+    <!-- 頂部標題 (手機版顯示，桌機版可選) -->
+    <header class="text-center pt-4 pb-2 bg-[#26201E] z-20 shrink-0 md:hidden">
+        <h1 class="text-lg font-bold tracking-wider text-[#EFE5D5]">
+            <i class="fas fa-database mr-2 text-[#FFAB5E]"></i>花材資料庫
+        </h1>
+    </header>
+
+    <!-- App Container (雙模組佈局) -->
+    <div id="app-container">
+        
+        <!-- 缺圖提示 -->
+        <div id="missing-assets-alert">
+            <h3 class="text-[#EFE5D5] font-bold mb-2">啟用預覽模式</h3>
+            <p class="text-[#A89088] text-xs mb-3">偵測到圖片檔缺漏，將使用色塊代替背景。</p>
+            <div id="missing-list-content" class="text-left text-[10px] bg-white/10 p-2 rounded mb-3 text-[#FFAB5E] font-mono"></div>
+            <button onclick="document.getElementById('missing-assets-alert').style.display='none'" 
+                class="bg-[#FFAB5E] text-[#26201E] px-4 py-1.5 rounded font-bold text-xs hover:bg-[#D48438]">
+                確認
+            </button>
+        </div>
+
+        <!-- === 左側/分頁 1: 花店展示 (VISUALIZER) === -->
+        <div id="view-shop" class="page-view active">
+            
+            <h2 class="hidden md:block text-xl font-bold text-[#EFE5D5] mb-4 text-center">
+                <i class="fas fa-store mr-2 text-[#FFAB5E]"></i>店舖展示
+            </h2>
+
+            <!-- 資訊條 -->
+            <div class="w-full flex justify-between items-center mb-4 px-1 md:max-w-full">
+                <button id="debug-btn" class="bg-[#362B28] text-[#A89088] px-3 py-1.5 rounded-lg text-xs border border-white/5 hover:text-white transition-colors">
+                    <i class="fas fa-wrench mr-1"></i>校正
+                </button>
+                <div class="flex gap-2">
+                    <div class="bg-[#362B28] text-[#FFAB5E] px-3 py-1.5 rounded-lg text-xs border border-white/5 font-bold">
+                        <i class="fas fa-layer-group mr-1"></i><span id="stage-display">Level 0</span>
+                    </div>
+                    <div class="bg-[#362B28] text-[#88C999] px-3 py-1.5 rounded-lg text-xs border border-white/5 font-bold" title="資料總筆數">
+                        <i class="fas fa-database mr-1"></i><span id="total-count-display">0</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Canvas -->
+            <div id="canvas-wrapper">
+                <div id="loading-overlay" class="absolute inset-0 bg-[#26201E] z-20 flex flex-col items-center justify-center text-[#A89088]">
+                    <i class="fas fa-circle-notch fa-spin text-3xl mb-3 text-[#FFAB5E]"></i>
+                    <p class="text-xs">Loading Database Visuals...</p>
+                </div>
+                <canvas id="gameCanvas"></canvas>
+                
+                <!-- 浣熊 -->
+                <div id="raccoon-area" class="absolute bottom-[5%] right-[5%] w-[15%] h-[20%] z-20 cursor-pointer rounded-full"></div>
+                <div id="raccoon-speech" class="absolute bottom-[25%] right-[10%] bg-white text-[#362B28] px-3 py-2 rounded-xl text-xs font-bold shadow-lg border-2 border-[#FFAB5E] pointer-events-none opacity-0 transition-opacity z-30 whitespace-nowrap">
+                    歡迎！
+                </div>
+            </div>
+            
+            <div id="debug-info" class="mt-4 text-[10px] text-[#FFAB5E] font-mono hidden bg-black/50 px-2 py-1 rounded w-full text-center"></div>
+        </div>
+
+        <!-- === 右側/分頁 2: 資料庫操作 (DATABASE) === -->
+        <div id="view-diary" class="page-view">
+            
+            <h2 class="hidden md:block text-xl font-bold text-[#EFE5D5] mb-4 text-center">
+                <i class="fas fa-database mr-2 text-[#FFAB5E]"></i>花材資料庫
+            </h2>
+
+            <div class="w-full flex flex-col gap-4 h-full md:max-w-full">
+                
+                <!-- 1. 新增輸入區 -->
+                <div class="bg-[#362B28] p-5 rounded-2xl shadow-lg border border-white/5 shrink-0">
+                    <div class="flex items-center justify-between mb-4">
+                        <h3 class="text-sm font-bold text-[#FFAB5E] flex items-center gap-2">
+                            <i class="fas fa-plus-circle"></i> 新增花材資料
+                        </h3>
+                        <button id="mic-btn" class="w-7 h-7 rounded-full bg-[#26201E] text-[#A89088] hover:text-[#FFAB5E] flex items-center justify-center transition-colors">
+                            <i class="fas fa-microphone text-xs"></i>
+                        </button>
+                    </div>
+
+                    <div class="space-y-3">
+                        <!-- 花名 -->
+                        <div class="relative group">
+                            <i class="fas fa-tag absolute left-3 top-3 text-[#A89088] text-xs group-focus-within:text-[#FFAB5E] transition-colors"></i>
+                            <input type="text" id="input-name" placeholder="花卉名稱 (例如: 尤加利葉)" 
+                                class="custom-input w-full pl-8 pr-3 py-2.5 rounded-xl text-sm">
+                        </div>
+                        
+                        <!-- 數量、單位、單價 (Grid Layout) -->
+                        <div class="grid grid-cols-3 gap-2">
+                            <!-- 數量 -->
+                            <div class="relative">
+                                <input type="number" id="input-qty" placeholder="數量" 
+                                    class="custom-input w-full px-3 py-2.5 rounded-xl text-sm text-center">
+                            </div>
+                            <!-- 單位選擇 (新功能) -->
+                            <div class="relative">
+                                <select id="input-unit" class="custom-select w-full px-2 py-2.5 rounded-xl text-sm text-center appearance-none cursor-pointer">
+                                    <option value="把">把</option>
+                                    <option value="支">支</option>
+                                    <option value="片">片</option>
+                                    <option value="盆">盆</option>
+                                    <option value="束">束</option>
+                                </select>
+                                <i class="fas fa-chevron-down absolute right-2 top-3 text-[10px] text-[#A89088] pointer-events-none"></i>
+                            </div>
+                            <!-- 價格 -->
+                            <div class="relative">
+                                <i class="fas fa-dollar-sign absolute left-2 top-3 text-[#A89088] text-xs"></i>
+                                <input type="number" id="input-price" placeholder="單價" 
+                                    class="custom-input w-full pl-5 pr-2 py-2.5 rounded-xl text-sm text-right">
+                            </div>
+                        </div>
+
+                        <button id="add-btn" class="w-full bg-gradient-to-r from-[#FFAB5E] to-[#D48438] text-white font-bold py-2.5 rounded-xl shadow-lg active:scale-[0.98] transition-all text-sm mt-1 hover:shadow-orange-500/20">
+                            寫入資料庫
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 2. 資料列表區 -->
+                <div class="bg-[#362B28] rounded-2xl shadow-lg border border-white/5 flex-1 overflow-hidden flex flex-col min-h-0 relative">
+                    
+                    <!-- 搜尋列 (固定在卡片頂部) -->
+                    <div class="p-3 border-b border-white/5 bg-[#26201E]/50 shrink-0">
+                        <div class="search-box">
+                            <i class="fas fa-search"></i>
+                            <input type="text" id="search-input" placeholder="搜尋歷史紀錄...">
+                        </div>
+                        <div class="flex justify-between items-end px-1">
+                            <span class="text-[10px] text-[#A89088]">歷史清單</span>
+                            <span id="filtered-count" class="text-[10px] bg-[#FFAB5E]/10 text-[#FFAB5E] px-2 py-0.5 rounded">0 筆</span>
+                        </div>
+                    </div>
+                    
+                    <!-- 列表捲動區 -->
+                    <ul id="item-list" class="flex-1 overflow-y-auto p-2 space-y-2">
+                        <!-- JS 產生項目 -->
+                    </ul>
+
+                    <!-- 空狀態 -->
+                    <div id="empty-state" class="hidden h-full flex flex-col items-center justify-center text-[#A89088] opacity-40 absolute inset-0 pointer-events-none">
+                        <i class="fas fa-folder-open text-4xl mb-2"></i>
+                        <p class="text-xs">資料庫是空的</p>
+                    </div>
+                </div>
+
+                <!-- 資料管理 -->
+                <div class="text-center py-1 shrink-0 flex justify-center gap-4">
+                    <button onclick="exportData()" class="text-[10px] text-[#A89088] hover:text-[#EFE5D5] transition-colors" title="Console Log JSON">
+                        <i class="fas fa-file-export mr-1"></i>備份(Log)
+                    </button>
+                    <button onclick="clearData()" class="text-[10px] text-[#A89088] hover:text-red-400 transition-colors">
+                        <i class="fas fa-trash-alt mr-1"></i>清空資料庫
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 底部導覽 (僅手機版) -->
+    <nav class="bottom-nav md:hidden">
+        <button class="nav-btn active" onclick="switchTab('shop')">
+            <i class="fas fa-store-alt mb-1"></i>
+            <span class="text-[10px]">展示</span>
+        </button>
+        <button class="nav-btn" onclick="switchTab('diary')">
+            <i class="fas fa-database mb-1"></i>
+            <span class="text-[10px]">資料庫</span>
+        </button>
+    </nav>
+
+    <!-- 程式邏輯 -->
+    <script>
+        // ==========================================
+        // 1. 設定與版本 (Config & Version)
+        // ==========================================
+        const VERSION = "v3.0.0";
+        console.log(`System Initialized: ${VERSION}`);
+
+        // 階段圖檔設定 (若無圖會自動切換預覽模式)
+        const STAGES = [
+            { threshold: 0,  file: 'shop_stage_0.png', name: "空曠空間", color: "#3C302C" }, 
+            { threshold: 3,  file: 'shop_stage_1.png', name: "初級工作室", color: "#6D5B4F" }, 
+            { threshold: 10, file: 'shop_stage_2.png', name: "中級花坊", color: "#4E6E5D" }, 
+            { threshold: 20, file: 'shop_stage_3.png', name: "高級名店", color: "#D48438" }  
+        ];
+
+        // 揭露點座標 (視覺化用)
+        const REVEAL_POSITIONS = [
+            { x: 150, y: 320, r: 60 }, { x: 300, y: 280, r: 55 },
+            { x: 450, y: 350, r: 65 }, { x: 650, y: 300, r: 60 },
+            { x: 200, y: 450, r: 50 }, { x: 400, y: 200, r: 40 },
+            { x: 550, y: 450, r: 55 }, { x: 100, y: 200, r: 45 },
+            { x: 700, y: 400, r: 50 }, { x: 350, y: 500, r: 60 }
+        ];
+
+        // ==========================================
+        // 2. 資料結構與狀態 (State)
+        // ==========================================
+        // v3.0 資料結構更新：items 仍為陣列，但視為資料庫條目
+        // 為了相容性，檢查 localStorage Key，若無則建立
+        let items = JSON.parse(localStorage.getItem('raccoon_db_v3_items')) || [];
+        
+        let loadedImages = {};
+        let missingFiles = [];
+        let isAssetsReady = false;
+        let isDebugMode = false;
+        
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const container = document.getElementById('canvas-wrapper');
+
+        // ==========================================
+        // 3. 資產載入 (Asset Loader)
+        // ==========================================
+        async function loadAssets() {
+            const promises = STAGES.map(stage => {
+                return new Promise((resolve) => {
+                    const img = new Image();
+                    img.src = stage.file;
+                    img.onload = () => resolve({ file: stage.file, img: img, status: 'ok' });
+                    img.onerror = () => resolve({ file: stage.file, img: null, status: 'missing' }); 
+                });
+            });
+
+            const results = await Promise.all(promises);
+            results.forEach(res => {
+                loadedImages[res.file] = res.img;
+                if (res.status === 'missing') missingFiles.push(res.file);
+            });
+
+            // 初始化 Canvas 尺寸
+            const baseImg = loadedImages[STAGES[0].file];
+            if (baseImg) {
+                canvas.width = baseImg.naturalWidth;
+                canvas.height = baseImg.naturalHeight;
+            } else {
+                canvas.width = 800;
+                canvas.height = 600; // 預設值
+            }
+            // 透過 CSS 保持比例
+            container.style.aspectRatio = `${canvas.width}/${canvas.height}`;
+
+            isAssetsReady = true;
+            document.getElementById('loading-overlay').style.display = 'none';
+
+            if (missingFiles.length > 0) {
+                const listHtml = missingFiles.map(f => `• ${f}`).join('<br>');
+                document.getElementById('missing-list-content').innerHTML = listHtml;
+                document.getElementById('missing-assets-alert').style.display = 'block';
+            }
+
+            drawScene();
+        }
+
+        // ==========================================
+        // 4. 繪圖與視覺化 (Visualizer)
+        // ==========================================
+        function drawScene() {
+            if (!isAssetsReady) return;
+
+            const count = items.length;
+            
+            // 計算目前等級 (Stage)
+            let currentStageIdx = 0;
+            for (let i = STAGES.length - 1; i >= 0; i--) {
+                if (count >= STAGES[i].threshold) {
+                    currentStageIdx = i;
+                    break;
+                }
+            }
+            
+            const currentStage = STAGES[currentStageIdx];
+            const nextStage = STAGES[currentStageIdx + 1];
+
+            document.getElementById('stage-display').textContent = currentStage.name;
+            document.getElementById('total-count-display').textContent = count;
+
+            // 繪製背景層
+            const bgImg = loadedImages[currentStage.file];
+            if (bgImg) {
+                ctx.drawImage(bgImg, 0, 0, canvas.width, canvas.height);
+            } else {
+                ctx.fillStyle = currentStage.color;
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                // 缺圖時的文字裝飾
+                ctx.fillStyle = "rgba(255,255,255,0.1)";
+                ctx.font = "bold 60px Zen Maru Gothic";
+                ctx.textAlign = "center";
+                ctx.fillText(currentStage.name, canvas.width/2, canvas.height/2);
+            }
+
+            // 繪製揭露層 (預覽下一級)
+            if (nextStage) {
+                ctx.save();
+                ctx.beginPath();
+                
+                // 圓點數量邏輯：越多資料，揭露越多
+                const circlesToDraw = isDebugMode ? REVEAL_POSITIONS.length : count;
+                
+                for(let i = 0; i < circlesToDraw; i++) {
+                    const pos = REVEAL_POSITIONS[i % REVEAL_POSITIONS.length];
+                    ctx.moveTo(pos.x + pos.r, pos.y);
+                    ctx.arc(pos.x, pos.y, pos.r, 0, Math.PI * 2);
+                }
+                
+                ctx.clip(); // 遮罩生效
+
+                const fgImg = loadedImages[nextStage.file];
+                if (fgImg) {
+                    ctx.drawImage(fgImg, 0, 0, canvas.width, canvas.height);
+                } else {
+                    ctx.fillStyle = nextStage.color;
+                    ctx.fillRect(0, 0, canvas.width, canvas.height);
+                }
+                ctx.restore();
+            }
+
+            // Debug 輔助線
+            if (isDebugMode) {
+                ctx.strokeStyle = '#FFAB5E';
+                ctx.lineWidth = 3;
+                REVEAL_POSITIONS.forEach((pos, idx) => {
+                    ctx.beginPath();
+                    ctx.arc(pos.x, pos.y, pos.r, 0, Math.PI * 2);
+                    ctx.stroke();
+                });
+            }
+        }
+
+        // ==========================================
+        // 5. 資料庫邏輯 (Database Logic)
+        // ==========================================
+        const itemListEl = document.getElementById('item-list');
+        const emptyStateEl = document.getElementById('empty-state');
+        const searchInput = document.getElementById('search-input');
+
+        // 渲染列表 (支援篩選)
+        function renderList(filterText = '') {
+            itemListEl.innerHTML = '';
+            
+            // 篩選邏輯
+            const filteredItems = items.filter(item => 
+                item.name.toLowerCase().includes(filterText.toLowerCase())
+            );
+
+            document.getElementById('filtered-count').textContent = `${filteredItems.length} 筆`;
+
+            if (items.length === 0) {
+                emptyStateEl.style.display = 'flex';
+                return;
+            } else {
+                emptyStateEl.style.display = 'none';
+            }
+
+            // 反轉順序，最新的在上面
+            [...filteredItems].reverse().forEach((item, index) => {
+                const totalCost = parseInt(item.price) * parseInt(item.qty);
+                const dateObj = new Date(item.date);
+                const dateStr = `${dateObj.getMonth()+1}/${dateObj.getDate()}`; // 簡單日期
+
+                const li = document.createElement('li');
+                li.className = 'bg-[#26201E] p-3 rounded-xl border border-white/5 flex justify-between items-center group hover:bg-[#3E322E] transition-colors';
+                
+                li.innerHTML = `
+                    <div class="flex flex-col">
+                        <div class="text-[#EFE5D5] font-bold text-sm flex items-center gap-2">
+                            <span>${item.name}</span>
+                            <span class="text-[10px] text-[#A89088] bg-black/20 px-1.5 rounded">${dateStr}</span>
+                        </div>
+                        <div class="text-[11px] text-[#A89088] mt-0.5">
+                            單價 $${item.price} / ${item.unit}
+                        </div>
+                    </div>
+                    <div class="text-right">
+                        <div class="text-[#FFAB5E] font-bold text-sm">$${totalCost.toLocaleString()}</div>
+                        <div class="text-[10px] text-[#A89088]">× ${item.qty} ${item.unit}</div>
+                    </div>
+                `;
+                
+                // 點擊項目自動帶入搜尋 (方便查看該花歷史)
+                li.addEventListener('click', () => {
+                    searchInput.value = item.name;
+                    renderList(item.name);
+                });
+
+                itemListEl.appendChild(li);
+            });
+        }
+
+        // 新增資料
+        document.getElementById('add-btn').addEventListener('click', () => {
+            const name = document.getElementById('input-name').value.trim();
+            const qty = document.getElementById('input-qty').value.trim();
+            const unit = document.getElementById('input-unit').value; // 取得單位
+            const price = document.getElementById('input-price').value.trim();
+
+            if (!name || !qty || !price) {
+                showSpeech("資料不完整喔！");
+                return;
+            }
+
+            const newItem = { 
+                name, 
+                qty: parseInt(qty), 
+                unit,
+                price: parseInt(price),
+                date: new Date().toISOString()
+            };
+
+            items.push(newItem);
+            localStorage.setItem('raccoon_db_v3_items', JSON.stringify(items)); // v3 Key
+            
+            // 清空輸入
+            document.getElementById('input-name').value = '';
+            document.getElementById('input-qty').value = '';
+            document.getElementById('input-price').value = '';
+            
+            // 檢查是否升級
+            checkUpgrade(items.length - 1, items.length);
+
+            renderList(searchInput.value); // 保持目前的搜尋狀態
+            drawScene();
+            showSpeech("資料庫寫入成功！");
+        });
+
+        // 升級檢查
+        function checkUpgrade(prevCount, newCount) {
+            const upgradeStage = STAGES.find(s => s.threshold > prevCount && s.threshold <= newCount);
+            if (upgradeStage) {
+                alert(`🎉 資料庫擴充！\n場景升級為：「${upgradeStage.name}」`);
+            }
+        }
+
+        // 搜尋監聽
+        searchInput.addEventListener('input', (e) => {
+            renderList(e.target.value);
+        });
+
+        // 清空資料
+        function clearData() {
+            if(confirm("警告：這將清空所有歷史資料庫！\n確定執行嗎？")) {
+                items = [];
+                localStorage.removeItem('raccoon_db_v3_items');
+                renderList();
+                drawScene();
+                showSpeech("資料庫已重置");
+            }
+        }
+        
+        // 匯出資料 (Console)
+        function exportData() {
+            console.log(JSON.stringify(items, null, 2));
+            alert("資料已輸出至 Console (F12)，可複製備份 JSON。");
+        }
+
+        // ==========================================
+        // 6. UI 互動與工具
+        // ==========================================
+        
+        // 分頁切換 (僅手機版有效)
+        window.switchTab = function(tabName) {
+            // 手機版切換邏輯
+            document.querySelectorAll('.nav-btn').forEach(btn => btn.classList.remove('active'));
+            const idx = tabName === 'shop' ? 0 : 1;
+            document.querySelectorAll('.nav-btn')[idx].classList.add('active');
+
+            // 針對手機版做 visibility 切換，桌機版由 CSS 處理強制顯示
+            if (window.innerWidth < 768) {
+                document.querySelectorAll('.page-view').forEach(view => {
+                    view.classList.remove('active');
+                    view.style.visibility = 'hidden'; 
+                });
+                const target = document.getElementById(`view-${tabName}`);
+                target.style.visibility = 'visible';
+                target.classList.add('active');
+            }
+        }
+
+        // 視窗大小改變時重繪 (確保 RWD Canvas 正確)
+        window.addEventListener('resize', () => {
+            drawScene();
+            // 重置 tab 顯示狀態以防 CSS 衝突
+            if (window.innerWidth >= 768) {
+                document.querySelectorAll('.page-view').forEach(v => {
+                    v.style.visibility = 'visible';
+                    v.classList.add('active');
+                });
+            } else {
+                switchTab('shop'); // 手機版回到預設頁
+            }
+        });
+
+        // Debug 模式
+        document.getElementById('debug-btn').addEventListener('click', () => {
+            isDebugMode = !isDebugMode;
+            const info = document.getElementById('debug-info');
+            const btn = document.getElementById('debug-btn');
+            
+            if (isDebugMode) {
+                info.classList.remove('hidden');
+                btn.style.color = '#FFAB5E';
+                btn.style.borderColor = '#FFAB5E';
+                canvas.style.cursor = 'crosshair';
+                showSpeech("Debug 模式開啟");
+            } else {
+                info.classList.add('hidden');
+                btn.style.color = '#A89088';
+                btn.style.borderColor = 'rgba(255,255,255,0.05)';
+                canvas.style.cursor = 'default';
+            }
+            drawScene();
+        });
+
+        canvas.addEventListener('click', (e) => {
+            if (!isDebugMode) return;
+            const rect = canvas.getBoundingClientRect();
+            const scaleX = canvas.width / rect.width;
+            const scaleY = canvas.height / rect.height;
+            const x = Math.floor((e.clientX - rect.left) * scaleX);
+            const y = Math.floor((e.clientY - rect.top) * scaleY);
+            
+            const code = `{ x: ${x}, y: ${y}, r: 50 },`;
+            document.getElementById('debug-info').textContent = `Copied: ${code}`;
+            navigator.clipboard.writeText(code);
+            
+            REVEAL_POSITIONS.push({ x, y, r: 50 });
+            drawScene();
+        });
+
+        // 語音輸入
+        document.getElementById('mic-btn').addEventListener('click', () => {
+            if ('webkitSpeechRecognition' in window) {
+                const recognition = new webkitSpeechRecognition();
+                recognition.lang = 'zh-TW';
+                recognition.onstart = () => showSpeech("我在聽...");
+                recognition.onresult = (e) => {
+                    document.getElementById('input-name').value = e.results[0][0].transcript;
+                };
+                recognition.start();
+            } else {
+                showSpeech("不支援語音輸入 QQ");
+            }
+        });
+
+        // 浣熊說話
+        const speechEl = document.getElementById('raccoon-speech');
+        let speechTimer;
+        function showSpeech(text) {
+            speechEl.textContent = text;
+            speechEl.style.opacity = '1';
+            clearTimeout(speechTimer);
+            speechTimer = setTimeout(() => speechEl.style.opacity = '0', 2500);
+        }
+        document.getElementById('raccoon-area').addEventListener('click', () => {
+            const msgs = ["要查詢歷史價格嗎？", "記得選對單位喔！", "今天花材真新鮮", "資料庫越來越豐富了"];
+            showSpeech(msgs[Math.floor(Math.random() * msgs.length)]);
+        });
+
+        // 初始化
+        loadAssets();
+        renderList();
+        
+        // 初始 Layout 判斷
+        if (window.innerWidth < 768) {
+            switchTab('shop');
+        }
+
+    </script>
+</body>
+</html>
